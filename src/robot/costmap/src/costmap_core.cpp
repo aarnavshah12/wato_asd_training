@@ -8,11 +8,11 @@ namespace robot {
 
 CostmapCore::CostmapCore() : grid_cells_(grid_width_cells * grid_height_cells, 0) {}
 
-void CostmapCore::reset_grid() {
+void CostmapCore::initializeCostmap() {
   std::fill(grid_cells_.begin(), grid_cells_.end(), 0);
 }
 
-bool CostmapCore::point_to_cell(
+bool CostmapCore::convertToGrid(
     double distance_m, double angle_rad, int& cell_x, int& cell_y) const {
   const double scan_x_m = distance_m * std::cos(angle_rad);
   const double scan_y_m = distance_m * std::sin(angle_rad);
@@ -23,13 +23,13 @@ bool CostmapCore::point_to_cell(
   return inside_grid(cell_x, cell_y);
 }
 
-void CostmapCore::mark_obstacle(int cell_x, int cell_y) {
+void CostmapCore::markObstacle(int cell_x, int cell_y) {
   if (inside_grid(cell_x, cell_y)) {
     grid_cells_[cell_index(cell_x, cell_y)] = obstacle_cost;
   }
 }
 
-void CostmapCore::inflate_obstacles() {
+void CostmapCore::inflateObstacles() {
   // Save the actual hits first. Otherwise an inflated cell could inflate its neighbors again.
   std::vector<std::pair<int, int>> obstacle_cells;
   for (int cell_y = 0; cell_y < grid_height_cells; ++cell_y) {

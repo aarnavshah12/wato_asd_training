@@ -8,12 +8,12 @@ CostmapNode::CostmapNode() : Node("costmap") {
   costmap_publisher_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>("/costmap", 10);
   lidar_subscription_ = this->create_subscription<sensor_msgs::msg::LaserScan>(
       "/lidar", rclcpp::SensorDataQoS(),
-      std::bind(&CostmapNode::on_lidar_scan, this, std::placeholders::_1));
+      std::bind(&CostmapNode::laserCallback, this, std::placeholders::_1));
 }
 
-void CostmapNode::on_lidar_scan(const sensor_msgs::msg::LaserScan::SharedPtr laser_scan) {
+void CostmapNode::laserCallback(const sensor_msgs::msg::LaserScan::SharedPtr laser_scan) {
   // Step 1: Start with an empty grid for this scan.
-  costmap_grid_.reset_grid();
+  costmap_grid_.initializeCostmap();
 
   // Step 2: Mark the grid cell at each valid laser hit.
   for (std::size_t beam_index = 0; beam_index < laser_scan->ranges.size(); ++beam_index) {
@@ -28,19 +28,19 @@ void CostmapNode::on_lidar_scan(const sensor_msgs::msg::LaserScan::SharedPtr las
         laser_scan->angle_min + beam_index * laser_scan->angle_increment;
     int cell_x;
     int cell_y;
-    if (costmap_grid_.point_to_cell(measured_distance_m, beam_angle_rad, cell_x, cell_y)) {
-      costmap_grid_.mark_obstacle(cell_x, cell_y);
+    if (costmap_grid_.convertToGrid(measured_distance_m, beam_angle_rad, cell_x, cell_y)) {
+      costmap_grid_.markObstacle(cell_x, cell_y);
     }
   }
 
   // Step 3: Give cells near obstacles a lower, distance-based cost.
-  costmap_grid_.inflate_obstacles();
+  costmap_grid_.inflateObstacles();
 
   // Step 4: Send the grid to the rest of the robot.
-  publish_costmap(*laser_scan);
+  publishCostmap(*laser_scan);
 }
 
-void CostmapNode::publish_costmap(const sensor_msgs::msg::LaserScan& laser_scan) {
+void CostmapNode::publishCostmap(const sensor_msgs::msg::LaserScan& laser_scan) {
   nav_msgs::msg::OccupancyGrid grid_message;
   grid_message.header = laser_scan.header;
   grid_message.info.map_load_time = laser_scan.header.stamp;

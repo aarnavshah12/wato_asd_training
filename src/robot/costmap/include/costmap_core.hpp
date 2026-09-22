@@ -18,10 +18,10 @@ class CostmapCore {
 
   CostmapCore();
 
-  void reset_grid();
-  bool point_to_cell(double distance_m, double angle_rad, int& cell_x, int& cell_y) const;
-  void mark_obstacle(int cell_x, int cell_y);
-  void inflate_obstacles();
+  void initializeCostmap();
+  bool convertToGrid(double distance_m, double angle_rad, int& cell_x, int& cell_y) const;
+  void markObstacle(int cell_x, int cell_y);
+  void inflateObstacles();
 
   const std::vector<int8_t>& cells() const { return grid_cells_; }
 

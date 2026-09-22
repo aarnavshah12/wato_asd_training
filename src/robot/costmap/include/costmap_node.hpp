@@ -12,8 +12,8 @@ class CostmapNode : public rclcpp::Node {
   CostmapNode();
 
  private:
-  void on_lidar_scan(const sensor_msgs::msg::LaserScan::SharedPtr laser_scan);
-  void publish_costmap(const sensor_msgs::msg::LaserScan& laser_scan);
+  void laserCallback(const sensor_msgs::msg::LaserScan::SharedPtr laser_scan);
+  void publishCostmap(const sensor_msgs::msg::LaserScan& laser_scan);
 
   robot::CostmapCore costmap_grid_;
   rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr lidar_subscription_;
