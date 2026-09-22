@@ -12,12 +12,12 @@ class CostmapNode : public rclcpp::Node {
   CostmapNode();
 
  private:
-  void laserCallback(const sensor_msgs::msg::LaserScan::SharedPtr scan);
-  void publishCostmap(const sensor_msgs::msg::LaserScan& scan);
+  void on_lidar_scan(const sensor_msgs::msg::LaserScan::SharedPtr laser_scan);
+  void publish_costmap(const sensor_msgs::msg::LaserScan& laser_scan);
 
-  robot::CostmapCore costmap_;
-  rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr lidar_sub_;
-  rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr costmap_pub_;
+  robot::CostmapCore costmap_grid_;
+  rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr lidar_subscription_;
+  rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr costmap_publisher_;
 };
 
 #endif  // COSTMAP_NODE_HPP_

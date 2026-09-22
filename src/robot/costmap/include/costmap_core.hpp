@@ -10,25 +10,26 @@ namespace robot {
 // A square grid centered on the laser. Each cell covers 10 cm.
 class CostmapCore {
  public:
-  static constexpr float kResolution = 0.1f;
-  static constexpr int kWidth = 400;
-  static constexpr int kHeight = 400;
-  static constexpr float kInflationRadius = 1.0f;
+  static constexpr float grid_resolution_m = 0.1f;
+  static constexpr int grid_width_cells = 400;
+  static constexpr int grid_height_cells = 400;
+  static constexpr float inflation_radius_m = 1.0f;
+  static constexpr int8_t obstacle_cost = 100;
 
   CostmapCore();
 
-  void initializeCostmap();
-  bool convertToGrid(double range, double angle, int& x_grid, int& y_grid) const;
-  void markObstacle(int x_grid, int y_grid);
-  void inflateObstacles();
+  void reset_grid();
+  bool point_to_cell(double distance_m, double angle_rad, int& cell_x, int& cell_y) const;
+  void mark_obstacle(int cell_x, int cell_y);
+  void inflate_obstacles();
 
-  const std::vector<int8_t>& data() const { return data_; }
+  const std::vector<int8_t>& cells() const { return grid_cells_; }
 
  private:
-  bool inBounds(int x_grid, int y_grid) const;
-  std::size_t index(int x_grid, int y_grid) const;
+  bool inside_grid(int cell_x, int cell_y) const;
+  std::size_t cell_index(int cell_x, int cell_y) const;
 
-  std::vector<int8_t> data_;
+  std::vector<int8_t> grid_cells_;
 };
 
 }  // namespace robot
