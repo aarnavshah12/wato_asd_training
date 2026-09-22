@@ -1,3 +1,4 @@
-# map_memory_node:
-#   ros__parameters:
-    
+map_memory_node:
+  ros__parameters:
+    map_size_m: 100.0
+    update_distance_m: 1.5
