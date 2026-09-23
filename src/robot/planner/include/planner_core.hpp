@@ -1,6 +1,7 @@
 #ifndef PLANNER_CORE_HPP_
 #define PLANNER_CORE_HPP_
 
+#include <cstdint>
 #include <vector>
 
 #include "geometry_msgs/msg/point.hpp"
@@ -29,9 +30,12 @@ class PlannerCore {
                    const geometry_msgs::msg::Point& point, Cell& cell) const;
   geometry_msgs::msg::Point cellToWorld(
       const nav_msgs::msg::OccupancyGrid& map, Cell cell) const;
-  bool canUseCell(const nav_msgs::msg::OccupancyGrid& map, Cell cell) const;
+  std::vector<uint8_t> clearanceCosts(const nav_msgs::msg::OccupancyGrid& map) const;
+  bool canUseCell(const nav_msgs::msg::OccupancyGrid& map, Cell cell,
+                  const std::vector<uint8_t>& clearance_costs) const;
   double segmentCost(const nav_msgs::msg::OccupancyGrid& map,
-                     Cell start, Cell end) const;
+                     Cell start, Cell end,
+                     const std::vector<uint8_t>& clearance_costs) const;
   int cellIndex(const nav_msgs::msg::OccupancyGrid& map, Cell cell) const;
   Cell indexToCell(const nav_msgs::msg::OccupancyGrid& map, int index) const;
 };

@@ -11,6 +11,9 @@ namespace robot {
 namespace {
 
 constexpr int blocked_cost = 50;
+// Prefer room for the whole car, but let it leave a close starting position.
+constexpr double preferred_clearance_m = 2.3;
+constexpr double minimum_clearance_m = 1.4;
 // Unknown space is possible to use, but explored space is usually a better route.
 constexpr double unknown_multiplier = 3.0;
 constexpr double infinity = std::numeric_limits<double>::infinity();
@@ -67,17 +70,69 @@ geometry_msgs::msg::Point PlannerCore::cellToWorld(
   return point;
 }
 
-bool PlannerCore::canUseCell(const nav_msgs::msg::OccupancyGrid& map, Cell cell) const {
+std::vector<uint8_t> PlannerCore::clearanceCosts(
+    const nav_msgs::msg::OccupancyGrid& map) const {
+  std::vector<uint8_t> clearance_costs(map.data.size(), 0);
+  const int radius_cells =
+      static_cast<int>(std::ceil(preferred_clearance_m / map.info.resolution));
+
+  struct OffsetCost {
+    int x;
+    int y;
+    uint8_t cost;
+  };
+  std::vector<OffsetCost> nearby_offsets;
+  for (int offset_y = -radius_cells; offset_y <= radius_cells; ++offset_y) {
+    for (int offset_x = -radius_cells; offset_x <= radius_cells; ++offset_x) {
+      const double distance_m =
+          std::hypot(offset_x, offset_y) * map.info.resolution;
+      if (distance_m <= preferred_clearance_m) {
+        const auto cost = static_cast<uint8_t>(std::lround(
+            100.0 * (1.0 - distance_m / preferred_clearance_m)));
+        nearby_offsets.push_back({offset_x, offset_y, cost});
+      }
+    }
+  }
+
+  // Keep extra room for the car, without making the published map look larger.
+  for (int cell_y = 0; cell_y < static_cast<int>(map.info.height); ++cell_y) {
+    for (int cell_x = 0; cell_x < static_cast<int>(map.info.width); ++cell_x) {
+      if (map.data[cellIndex(map, {cell_x, cell_y})] != 100) {
+        continue;
+      }
+      for (const auto& offset : nearby_offsets) {
+        const int nearby_x = cell_x + offset.x;
+        const int nearby_y = cell_y + offset.y;
+        if (nearby_x >= 0 && nearby_y >= 0 &&
+            nearby_x < static_cast<int>(map.info.width) &&
+            nearby_y < static_cast<int>(map.info.height)) {
+          const int index = cellIndex(map, {nearby_x, nearby_y});
+          clearance_costs[index] =
+              std::max(clearance_costs[index], offset.cost);
+        }
+      }
+    }
+  }
+  return clearance_costs;
+}
+
+bool PlannerCore::canUseCell(const nav_msgs::msg::OccupancyGrid& map, Cell cell,
+                             const std::vector<uint8_t>& clearance_costs) const {
   if (cell.x < 0 || cell.y < 0 ||
       cell.x >= static_cast<int>(map.info.width) ||
       cell.y >= static_cast<int>(map.info.height)) {
     return false;
   }
-  return map.data[cellIndex(map, cell)] < blocked_cost;
+  const int index = cellIndex(map, cell);
+  const int minimum_clearance_cost = static_cast<int>(std::floor(
+      100.0 * (1.0 - minimum_clearance_m / preferred_clearance_m)));
+  return map.data[index] < blocked_cost &&
+         clearance_costs[index] < minimum_clearance_cost;
 }
 
 double PlannerCore::segmentCost(const nav_msgs::msg::OccupancyGrid& map,
-                                Cell start, Cell end) const {
+                                Cell start, Cell end,
+                                const std::vector<uint8_t>& clearance_costs) const {
   const double length = std::hypot(end.x - start.x, end.y - start.y);
   const int samples = std::max(1, static_cast<int>(std::ceil(length * 2.0)));
   double multiplier_sum = 0.0;
@@ -88,17 +143,20 @@ double PlannerCore::segmentCost(const nav_msgs::msg::OccupancyGrid& map,
     const Cell cell = {
         static_cast<int>(std::lround(start.x + (end.x - start.x) * fraction)),
         static_cast<int>(std::lround(start.y + (end.y - start.y) * fraction))};
-    if (!canUseCell(map, cell)) {
+    if (!canUseCell(map, cell, clearance_costs)) {
       return infinity;
     }
     if (cell.x != previous.x && cell.y != previous.y &&
-        (!canUseCell(map, {cell.x, previous.y}) ||
-         !canUseCell(map, {previous.x, cell.y}))) {
+        (!canUseCell(map, {cell.x, previous.y}, clearance_costs) ||
+         !canUseCell(map, {previous.x, cell.y}, clearance_costs))) {
       return infinity;  // Do not cut diagonally through an obstacle corner.
     }
 
-    const int cost = map.data[cellIndex(map, cell)];
-    multiplier_sum += cost < 0 ? unknown_multiplier : 1.0 + cost / 25.0;
+    const int index = cellIndex(map, cell);
+    const int cost = map.data[index];
+    const double map_multiplier =
+        cost < 0 ? unknown_multiplier : 1.0 + cost / 25.0;
+    multiplier_sum += map_multiplier + clearance_costs[index] / 5.0;
     previous = cell;
   }
   return length * multiplier_sum / (samples + 1);
@@ -116,11 +174,13 @@ std::vector<geometry_msgs::msg::Point> PlannerCore::findPath(
     return {};
   }
 
+  const auto clearance_costs = clearanceCosts(map);
   Cell start_cell;
   Cell goal_cell;
   if (!worldToCell(map, start, start_cell) ||
       !worldToCell(map, goal, goal_cell) ||
-      !canUseCell(map, start_cell) || !canUseCell(map, goal_cell)) {
+      !canUseCell(map, start_cell, clearance_costs) ||
+      !canUseCell(map, goal_cell, clearance_costs)) {
     return {};
   }
 
@@ -154,7 +214,7 @@ std::vector<geometry_msgs::msg::Point> PlannerCore::findPath(
         }
         const Cell neighbor = {current_cell.x + offset_x,
                                current_cell.y + offset_y};
-        if (!canUseCell(map, neighbor)) {
+        if (!canUseCell(map, neighbor, clearance_costs)) {
           continue;
         }
         const int neighbor_index = cellIndex(map, neighbor);
@@ -162,14 +222,18 @@ std::vector<geometry_msgs::msg::Point> PlannerCore::findPath(
           continue;
         }
 
-        // Theta*: try a straight connection from the current cell's parent.
-        int new_parent = parent[current.index];
-        double travel_cost = segmentCost(map, indexToCell(map, new_parent), neighbor);
-        if (!std::isfinite(travel_cost)) {
-          new_parent = current.index;
-          travel_cost = segmentCost(map, current_cell, neighbor);
+        // Compare a normal step with a straight Theta* shortcut.
+        int new_parent = current.index;
+        double new_cost = best_cost[current.index] +
+            segmentCost(map, current_cell, neighbor, clearance_costs);
+        const int shortcut_parent = parent[current.index];
+        const double shortcut_cost = best_cost[shortcut_parent] +
+            segmentCost(map, indexToCell(map, shortcut_parent),
+                        neighbor, clearance_costs);
+        if (shortcut_cost <= new_cost) {
+          new_parent = shortcut_parent;
+          new_cost = shortcut_cost;
         }
-        const double new_cost = best_cost[new_parent] + travel_cost;
         if (new_cost >= best_cost[neighbor_index]) {
           continue;
         }
@@ -215,6 +279,13 @@ bool PlannerCore::pathIsClear(
   if (path.empty()) {
     return false;
   }
+  const std::size_t cell_count =
+      static_cast<std::size_t>(map.info.width) * map.info.height;
+  if (map.info.resolution <= 0.0 || map.info.width == 0 || map.info.height == 0 ||
+      map.data.size() != cell_count) {
+    return false;
+  }
+  const auto clearance_costs = clearanceCosts(map);
 
   // Only check the route ahead of the robot. Old waypoints are already passed.
   std::size_t nearest_segment = 0;
@@ -254,12 +325,12 @@ bool PlannerCore::pathIsClear(
   for (std::size_t index = nearest_segment + 1; index < path.size(); ++index) {
     Cell next;
     if (!worldToCell(map, path[index], next) ||
-        !std::isfinite(segmentCost(map, previous, next))) {
+        !std::isfinite(segmentCost(map, previous, next, clearance_costs))) {
       return false;
     }
     previous = next;
   }
-  return canUseCell(map, previous);
+  return canUseCell(map, previous, clearance_costs);
 }
 
 }  // namespace robot
