@@ -91,7 +91,7 @@ geometry_msgs::msg::Twist ControlCore::computeVelocity(
       std::sin(target_angle - yaw), std::cos(target_angle - yaw));
 
   geometry_msgs::msg::Twist command;
-  if (std::abs(heading_error) > 0.5) {
+  if (std::abs(heading_error) > 0.9) {
     // Turn toward a target that is far to the side or behind the robot.
     command.angular.z = std::clamp(heading_error, -max_angular_speed_rps,
                                     max_angular_speed_rps);
