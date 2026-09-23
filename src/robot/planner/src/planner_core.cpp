@@ -98,7 +98,7 @@ double PlannerCore::segmentCost(const nav_msgs::msg::OccupancyGrid& map,
     }
 
     const int cost = map.data[cellIndex(map, cell)];
-    multiplier_sum += cost < 0 ? unknown_multiplier : 1.0 + cost / 50.0;
+    multiplier_sum += cost < 0 ? unknown_multiplier : 1.0 + cost / 25.0;
     previous = cell;
   }
   return length * multiplier_sum / (samples + 1);
@@ -206,6 +206,60 @@ std::vector<geometry_msgs::msg::Point> PlannerCore::findPath(
   path.front() = start;
   path.back() = goal;
   return path;
+}
+
+bool PlannerCore::pathIsClear(
+    const nav_msgs::msg::OccupancyGrid& map,
+    const geometry_msgs::msg::Point& robot_position,
+    const std::vector<geometry_msgs::msg::Point>& path) const {
+  if (path.empty()) {
+    return false;
+  }
+
+  // Only check the route ahead of the robot. Old waypoints are already passed.
+  std::size_t nearest_segment = 0;
+  double nearest_fraction = 0.0;
+  double nearest_distance = infinity;
+  for (std::size_t index = 0; index + 1 < path.size(); ++index) {
+    const auto& start = path[index];
+    const auto& end = path[index + 1];
+    const double dx = end.x - start.x;
+    const double dy = end.y - start.y;
+    const double length_squared = dx * dx + dy * dy;
+    const double fraction = length_squared > 0.0
+        ? std::clamp(((robot_position.x - start.x) * dx +
+                      (robot_position.y - start.y) * dy) / length_squared,
+                     0.0, 1.0)
+        : 0.0;
+    const double distance = std::hypot(
+        robot_position.x - (start.x + fraction * dx),
+        robot_position.y - (start.y + fraction * dy));
+    if (distance < nearest_distance) {
+      nearest_distance = distance;
+      nearest_segment = index;
+      nearest_fraction = fraction;
+    }
+  }
+
+  geometry_msgs::msg::Point current_point = path[nearest_segment];
+  if (nearest_segment + 1 < path.size()) {
+    const auto& end = path[nearest_segment + 1];
+    current_point.x += nearest_fraction * (end.x - current_point.x);
+    current_point.y += nearest_fraction * (end.y - current_point.y);
+  }
+  Cell previous;
+  if (!worldToCell(map, current_point, previous)) {
+    return false;
+  }
+  for (std::size_t index = nearest_segment + 1; index < path.size(); ++index) {
+    Cell next;
+    if (!worldToCell(map, path[index], next) ||
+        !std::isfinite(segmentCost(map, previous, next))) {
+      return false;
+    }
+    previous = next;
+  }
+  return canUseCell(map, previous);
 }
 
 }  // namespace robot

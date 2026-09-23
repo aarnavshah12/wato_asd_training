@@ -15,6 +15,10 @@ class PlannerCore {
       const geometry_msgs::msg::Point& start,
       const geometry_msgs::msg::Point& goal) const;
 
+  bool pathIsClear(const nav_msgs::msg::OccupancyGrid& map,
+                   const geometry_msgs::msg::Point& robot_position,
+                   const std::vector<geometry_msgs::msg::Point>& path) const;
+
  private:
   struct Cell {
     int x;

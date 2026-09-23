@@ -1,5 +1,6 @@
 #include "map_memory_core.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 
@@ -89,7 +90,8 @@ bool MapMemoryCore::integrateCostmap(const nav_msgs::msg::OccupancyGrid& costmap
 
       const std::size_t map_index =
           static_cast<std::size_t>(map_y) * global_map_.info.width + map_x;
-      global_map_.data[map_index] = cost;  // The newest known value wins.
+      // Obstacles are static here. A later scan may not see one, so keep it.
+      global_map_.data[map_index] = std::max(global_map_.data[map_index], cost);
     }
   }
 

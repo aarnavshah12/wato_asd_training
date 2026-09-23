@@ -28,7 +28,11 @@ PlannerNode::PlannerNode()
 
 void PlannerNode::mapCallback(const nav_msgs::msg::OccupancyGrid::SharedPtr map) {
   latest_map_ = map;
-  if (state_ == State::FollowingGoal) {
+  // Keep the current route unless the updated map blocks it.
+  if (state_ == State::FollowingGoal && latest_odometry_ &&
+      !current_points_.empty() &&
+      !planner_.pathIsClear(*map, latest_odometry_->pose.pose.position,
+                            current_points_)) {
     needs_replan_ = true;
   }
 }
@@ -57,11 +61,13 @@ void PlannerNode::timerCallback() {
     return;
   }
 
+  const auto& robot_position = latest_odometry_->pose.pose.position;
   const double distance = std::hypot(
-      goal_->point.x - latest_odometry_->pose.pose.position.x,
-      goal_->point.y - latest_odometry_->pose.pose.position.y);
+      goal_->point.x - robot_position.x,
+      goal_->point.y - robot_position.y);
   if (distance <= goal_tolerance_m_) {
     state_ = State::WaitingForGoal;
+    current_points_.clear();
     publishEmptyPath();
     RCLCPP_INFO(get_logger(), "Goal reached");
     return;
@@ -81,10 +87,13 @@ void PlannerNode::planPath() {
   const auto points = planner_.findPath(
       *latest_map_, latest_odometry_->pose.pose.position, goal_->point);
   if (points.empty()) {
+    current_points_.clear();
     RCLCPP_WARN(get_logger(), "No path found to the goal");
     publishEmptyPath();
     return;
   }
+
+  current_points_ = points;
 
   nav_msgs::msg::Path path;
   path.header.frame_id = latest_map_->header.frame_id;

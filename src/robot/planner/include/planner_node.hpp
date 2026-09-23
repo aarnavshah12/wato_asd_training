@@ -31,6 +31,7 @@ class PlannerNode : public rclcpp::Node {
   double goal_tolerance_m_;
   double replan_timeout_s_;
   std::chrono::steady_clock::time_point last_plan_time_;
+  std::vector<geometry_msgs::msg::Point> current_points_;
 
   nav_msgs::msg::OccupancyGrid::SharedPtr latest_map_;
   nav_msgs::msg::Odometry::SharedPtr latest_odometry_;
