@@ -9,7 +9,7 @@ ControlNode::ControlNode()
     : Node("control"),
       lookahead_distance_m_(this->declare_parameter<double>("lookahead_distance_m", 1.5)),
       goal_tolerance_m_(this->declare_parameter<double>("goal_tolerance_m", 0.2)),
-      linear_speed_mps_(this->declare_parameter<double>("linear_speed_mps", 1.5)),
+      linear_speed_mps_(this->declare_parameter<double>("linear_speed_mps", 2.0)),
       max_angular_speed_rps_(this->declare_parameter<double>("max_angular_speed_rps", 1.5)) {
   path_subscription_ = this->create_subscription<nav_msgs::msg::Path>(
       "/path", rclcpp::QoS(1).transient_local(),
