@@ -2,7 +2,6 @@
 #define PLANNER_NODE_HPP_
 
 #include <chrono>
-#include <limits>
 
 #include "geometry_msgs/msg/point_stamped.hpp"
 #include "nav_msgs/msg/occupancy_grid.hpp"
@@ -31,8 +30,6 @@ class PlannerNode : public rclcpp::Node {
   bool needs_replan_ = false;
   double goal_tolerance_m_;
   double replan_timeout_s_;
-  double best_distance_to_goal_ = std::numeric_limits<double>::infinity();
-  std::chrono::steady_clock::time_point last_progress_time_;
   std::chrono::steady_clock::time_point last_plan_time_;
 
   nav_msgs::msg::OccupancyGrid::SharedPtr latest_map_;

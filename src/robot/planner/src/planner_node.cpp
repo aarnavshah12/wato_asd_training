@@ -38,22 +38,10 @@ void PlannerNode::goalCallback(
   goal_ = goal;
   state_ = State::FollowingGoal;
   needs_replan_ = true;
-  best_distance_to_goal_ = std::numeric_limits<double>::infinity();
-  last_progress_time_ = std::chrono::steady_clock::now();
 }
 
 void PlannerNode::odomCallback(const nav_msgs::msg::Odometry::SharedPtr odometry) {
   latest_odometry_ = odometry;
-  if (state_ != State::FollowingGoal || !goal_) {
-    return;
-  }
-  const double distance = std::hypot(
-      goal_->point.x - odometry->pose.pose.position.x,
-      goal_->point.y - odometry->pose.pose.position.y);
-  if (distance + 0.2 < best_distance_to_goal_) {
-    best_distance_to_goal_ = distance;
-    last_progress_time_ = std::chrono::steady_clock::now();
-  }
 }
 
 void PlannerNode::timerCallback() {
@@ -80,12 +68,9 @@ void PlannerNode::timerCallback() {
   }
 
   const auto now = std::chrono::steady_clock::now();
-  const auto no_progress =
-      std::chrono::duration<double>(now - last_progress_time_).count();
   const auto since_plan =
       std::chrono::duration<double>(now - last_plan_time_).count();
-  if (needs_replan_ ||
-      (no_progress >= replan_timeout_s_ && since_plan >= replan_timeout_s_)) {
+  if (needs_replan_ || since_plan >= replan_timeout_s_) {
     planPath();
     needs_replan_ = false;
     last_plan_time_ = now;
