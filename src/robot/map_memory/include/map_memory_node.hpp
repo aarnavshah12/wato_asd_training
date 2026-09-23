@@ -1,6 +1,8 @@
 #ifndef MAP_MEMORY_NODE_HPP_
 #define MAP_MEMORY_NODE_HPP_
 
+#include <deque>
+
 #include "nav_msgs/msg/occupancy_grid.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "rclcpp/rclcpp.hpp"
@@ -19,7 +21,7 @@ class MapMemoryNode : public rclcpp::Node {
   robot::MapMemoryCore map_memory_;
   double distance_threshold_m_;
   nav_msgs::msg::OccupancyGrid::SharedPtr latest_costmap_;
-  nav_msgs::msg::Odometry::SharedPtr latest_odometry_;
+  std::deque<nav_msgs::msg::Odometry::SharedPtr> recent_odometry_;
   bool has_last_update_ = false;
   bool costmap_updated_ = false;
   double last_update_x_ = 0.0;
