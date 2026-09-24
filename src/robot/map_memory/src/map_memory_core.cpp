@@ -1,6 +1,5 @@
 #include "map_memory_core.hpp"
 
-#include <algorithm>
 #include <cmath>
 #include <cstddef>
 
@@ -62,36 +61,35 @@ bool MapMemoryCore::integrateCostmap(const nav_msgs::msg::OccupancyGrid& costmap
   const double local_resolution = costmap.info.resolution;
   const double map_resolution = global_map_.info.resolution;
 
-  for (unsigned int cell_y = 0; cell_y < costmap.info.height; ++cell_y) {
-    for (unsigned int cell_x = 0; cell_x < costmap.info.width; ++cell_x) {
-      const std::size_t local_index =
-          static_cast<std::size_t>(cell_y) * costmap.info.width + cell_x;
-      const int8_t cost = costmap.data[local_index];
-      if (cost < 0) {
-        continue;  // Unknown local cells leave older map data alone.
-      }
-
-      // Find this local cell's centre, then rotate and move it into the world frame.
-      const double local_x = costmap.info.origin.position.x +
-                             (cell_x + 0.5) * local_resolution;
-      const double local_y = costmap.info.origin.position.y +
-                             (cell_y + 0.5) * local_resolution;
-      const double world_x = position.x + cos_yaw * local_x - sin_yaw * local_y;
-      const double world_y = position.y + sin_yaw * local_x + cos_yaw * local_y;
-      const int map_x = static_cast<int>(std::floor(
-          (world_x - global_map_.info.origin.position.x) / map_resolution));
-      const int map_y = static_cast<int>(std::floor(
-          (world_y - global_map_.info.origin.position.y) / map_resolution));
-      if (map_x < 0 || map_y < 0 ||
-          map_x >= static_cast<int>(global_map_.info.width) ||
-          map_y >= static_cast<int>(global_map_.info.height)) {
+  // Sample the latest local map at each world cell. This covers every cell in
+  // the scan's area, so an old obstacle mark can be replaced by a new free cell.
+  for (unsigned int map_y = 0; map_y < global_map_.info.height; ++map_y) {
+    for (unsigned int map_x = 0; map_x < global_map_.info.width; ++map_x) {
+      const double world_x = global_map_.info.origin.position.x +
+                             (map_x + 0.5) * map_resolution;
+      const double world_y = global_map_.info.origin.position.y +
+                             (map_y + 0.5) * map_resolution;
+      const double dx = world_x - position.x;
+      const double dy = world_y - position.y;
+      const double local_x = cos_yaw * dx + sin_yaw * dy;
+      const double local_y = -sin_yaw * dx + cos_yaw * dy;
+      const int cell_x = static_cast<int>(std::floor(
+          (local_x - costmap.info.origin.position.x) / local_resolution));
+      const int cell_y = static_cast<int>(std::floor(
+          (local_y - costmap.info.origin.position.y) / local_resolution));
+      if (cell_x < 0 || cell_y < 0 ||
+          cell_x >= static_cast<int>(costmap.info.width) ||
+          cell_y >= static_cast<int>(costmap.info.height)) {
         continue;
       }
 
-      const std::size_t map_index =
-          static_cast<std::size_t>(map_y) * global_map_.info.width + map_x;
-      // Obstacles are static here. A later scan may not see one, so keep it.
-      global_map_.data[map_index] = std::max(global_map_.data[map_index], cost);
+      const int8_t cost = costmap.data[
+          static_cast<std::size_t>(cell_y) * costmap.info.width + cell_x];
+      if (cost >= 0) {
+        const std::size_t map_index =
+            static_cast<std::size_t>(map_y) * global_map_.info.width + map_x;
+        global_map_.data[map_index] = cost;
+      }
     }
   }
 
